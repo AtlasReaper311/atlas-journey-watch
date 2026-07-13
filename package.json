@@ -1,0 +1,19 @@
+{
+  "name": "atlas-journey-watch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scheduled synthetic journeys across the public Atlas Systems estate.",
+  "type": "module",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
