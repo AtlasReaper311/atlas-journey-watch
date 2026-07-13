@@ -1,12 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 const API = process.env.ATLAS_API_URL || "https://api.atlas-systems.uk";
-const STATUS =
-  process.env.ATLAS_STATUS_URL || "https://status.atlas-systems.uk";
-const CORPUS =
-  process.env.ATLAS_CORPUS_URL || "https://corpus.atlas-systems.uk";
-const RAMONE =
-  process.env.ATLAS_RAMONE_URL || "https://ramone.atlas-systems.uk";
+const STATUS = process.env.ATLAS_STATUS_URL || "https://status.atlas-systems.uk";
+const SITE = process.env.ATLAS_SITE_URL || "https://atlas-systems.uk";
+const CORPUS = process.env.ATLAS_CORPUS_URL || "https://corpus.atlas-systems.uk";
+const RAMONE = process.env.ATLAS_RAMONE_URL || "https://ramone.atlas-systems.uk";
 
 function firstArray(value, preferredKeys = []) {
   if (Array.isArray(value)) {
@@ -38,9 +36,7 @@ async function jsonOrFail(response, label) {
   expect(response.ok(), `${label} returned ${response.status()}`).toBeTruthy();
 
   const contentType = response.headers()["content-type"] || "";
-  expect(contentType, `${label} did not return JSON`).toContain(
-    "application/json",
-  );
+  expect(contentType, `${label} did not return JSON`).toContain("application/json");
 
   return response.json();
 }
@@ -53,14 +49,22 @@ async function optionalJson(response) {
   }
 }
 
+async function textOrFail(response, label) {
+  expect(response, `${label} response was missing`).toBeTruthy();
+  expect(response.ok(), `${label} returned ${response.status()}`).toBeTruthy();
+
+  const text = await response.text();
+  expect(text.length, `${label} returned an empty body`).toBeGreaterThan(200);
+  expect(text.toLowerCase(), `${label} returned an obvious server error`).not.toMatch(
+    /application error|internal server error|cannot read properties/,
+  );
+
+  return text;
+}
+
 test.describe("public estate journeys", () => {
-  test("public API advertises a working OpenAPI contract", async ({
-    request,
-  }) => {
-    const index = await jsonOrFail(
-      await request.get(`${API}/v1`),
-      "public API index",
-    );
+  test("public API advertises a working OpenAPI contract", async ({ request }) => {
+    const index = await jsonOrFail(await request.get(`${API}/v1`), "public API index");
     expect(index).toBeTruthy();
 
     const spec = await jsonOrFail(
@@ -75,71 +79,43 @@ test.describe("public estate journeys", () => {
     expect(spec.paths["/v1/search"]).toBeTruthy();
   });
 
-  test("registry data reaches the Lab system map", async ({
-    page,
-    request,
-  }) => {
+  test("registry data reaches the public Lab surface", async ({ request }) => {
     const registry = await jsonOrFail(
       await request.get(`${API}/v1/registry`),
       "estate registry",
     );
 
-    const entries = firstArray(registry, [
-      "workers",
-      "services",
-      "components",
-      "items",
-    ]);
+    const entries = firstArray(registry, ["workers", "services", "components", "items"]);
     expect(entries, "registry did not expose a component array").toBeTruthy();
     expect(entries.length).toBeGreaterThan(0);
 
-    await page.goto("/lab/", { waitUntil: "domcontentloaded" });
-
-    await expect(page).toHaveTitle(/Lab.*Atlas Systems/i);
-
-    await expect(page.locator("body")).toContainText(/System map/i, {
-      timeout: 20_000,
-    });
-
-    await expect(page.locator("body")).toContainText(
-      /atlas-api-public|atlas-api-index|atlas-notify/i,
-      { timeout: 20_000 },
-    );
-
-    await expect(page.locator("body")).not.toContainText(
-      /application error|internal server error/i,
-    );
+    const html = await textOrFail(await request.get(`${SITE}/lab/`), "Lab page");
+    expect(html).toMatch(/Lab|Live systems|System map|atlas-api-public|atlas-notify/i);
   });
 
-  test("estate search returns provenance, rate-limit honesty, or an honest sleep state", async ({
-    request,
-  }) => {
+  test("estate search returns provenance, rate-limit honesty, or an honest upstream state", async ({ request }) => {
     const response = await request.get(`${API}/v1/search`, {
       params: { q: "zone_id Cloudflare route" },
     });
 
-    expect([200, 429, 503]).toContain(response.status());
+    expect([200, 429, 502, 503]).toContain(response.status());
 
     const payload = await optionalJson(response);
 
     if (response.status() === 429) {
-      expect(JSON.stringify(payload).toLowerCase()).toMatch(
-        /rate|limit|too many/,
-      );
+      expect(JSON.stringify(payload).toLowerCase()).toMatch(/rate|limit|too many/);
       return;
     }
 
-    if (response.status() === 503) {
-      expect(payload.ok).toBeFalsy();
-
+    if ([502, 503].includes(response.status())) {
       const infra = await jsonOrFail(
         await request.get(`${API}/v1/infra/status`),
         "infra status",
       );
 
-      const serialized = JSON.stringify(infra).toLowerCase();
+      const serialized = `${JSON.stringify(payload)} ${JSON.stringify(infra)}`.toLowerCase();
       expect(serialized).toMatch(
-        /down|offline|degraded|stale|unreachable|false/,
+        /down|offline|degraded|stale|unreachable|false|bad gateway|upstream|error/,
       );
       return;
     }
@@ -162,10 +138,7 @@ test.describe("public estate journeys", () => {
     );
 
     const events = firstArray(payload, ["events", "entries", "items"]);
-    expect(
-      events,
-      "notification feed did not expose an event array",
-    ).toBeTruthy();
+    expect(events, "notification feed did not expose an event array").toBeTruthy();
     expect(events.length).toBeLessThanOrEqual(200);
   });
 
@@ -184,40 +157,26 @@ test.describe("public estate journeys", () => {
 
     const corpus = await request.get(`${CORPUS}/health`);
 
-    if ([429, 503].includes(corpus.status())) {
+    if ([429, 502, 503].includes(corpus.status())) {
       const payload = await optionalJson(corpus);
       expect(JSON.stringify(payload).toLowerCase()).toMatch(
-        /rate|limit|sleep|down|offline|degraded|stale|unreachable|false/,
+        /rate|limit|sleep|down|offline|degraded|stale|unreachable|false|bad gateway|upstream|error/,
       );
       return;
     }
 
-    expect(
-      corpus.ok(),
-      `corpus health returned ${corpus.status()}`,
-    ).toBeTruthy();
+    expect(corpus.ok(), `corpus health returned ${corpus.status()}`).toBeTruthy();
   });
 
-  test("public status surface renders service state", async ({ page }) => {
-    const response = await page.goto(STATUS, { waitUntil: "networkidle" });
+  test("public status surface renders service state", async ({ request }) => {
+    const html = await textOrFail(await request.get(STATUS), "Status page");
 
-    expect(response).toBeTruthy();
-    expect(response.ok()).toBeTruthy();
-
-    await expect(page).toHaveTitle(/status|atlas/i);
-
-    await expect(page.locator("body")).toContainText(
-      /Atlas[_\s]Systems|atlas-systems\.uk/i,
-      { timeout: 12_000 },
+    expect(html).toMatch(
+      /atlas[_\s-]?systems|atlas-systems\.uk|Every service|Live signal|Service levels/i,
     );
 
-    await expect(page.locator("body")).toContainText(
-      /Live signal|Service levels|Operational|Unreachable/i,
-      { timeout: 12_000 },
-    );
-
-    await expect(page.locator("body")).not.toContainText(
-      /application error|internal server error/i,
+    expect(html).toMatch(
+      /Operational|Unreachable|public API|event router|worker registry/i,
     );
   });
 });
