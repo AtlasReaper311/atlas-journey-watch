@@ -168,6 +168,19 @@ test.describe("public estate journeys", () => {
     expect(corpus.ok(), `corpus health returned ${corpus.status()}`).toBeTruthy();
   });
 
+
+  test("quota watchdog exposes a healthy usage snapshot", async ({ request }) => {
+    const payload = await jsonOrFail(
+      await request.get(`${API}/quota`),
+      "quota watchdog",
+    );
+
+    expect(Array.isArray(payload.meters), "quota snapshot did not expose meters").toBeTruthy();
+    expect(payload.meters.length).toBeGreaterThan(0);
+    expect(payload.period).toBeTruthy();
+    expect(payload.generated_at).toBeTruthy();
+  });
+
   test("public status surface renders service state", async ({ request }) => {
     const html = await textOrFail(await request.get(STATUS), "Status page");
 
