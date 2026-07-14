@@ -1,0 +1,140 @@
+name: Release watch
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Expected repository in owner/name form
+        required: true
+        default: AtlasReaper311/atlas-api-public
+        type: string
+      commit:
+        description: Expected full lowercase commit SHA
+        required: true
+        type: string
+      service_id:
+        description: Allowlisted release service ID
+        required: true
+        default: atlas-api-public
+        type: string
+      environment:
+        description: Release environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+      deployment_target:
+        description: Deployment target identifier
+        required: true
+        default: cloudflare-worker:atlas-api-public
+        type: string
+      deployment_id:
+        description: Deployment or workflow run identifier
+        required: true
+        type: string
+      metadata_url:
+        description: Allowlisted HTTPS metadata URL
+        required: true
+        default: https://api.atlas-systems.uk/v1/_meta
+        type: string
+      rollback_ref:
+        description: Repository-relative Markdown rollback reference
+        required: true
+        default: docs/runbooks/release-watch.md
+        type: string
+  repository_dispatch:
+    types: [release-watch]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-watch-${{ github.event.client_payload.service_id || inputs.service_id }}-${{ github.event.client_payload.environment || inputs.environment }}-${{ github.event.client_payload.commit || inputs.commit }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify deployed release
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out release-watch executor
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate release request
+        id: request
+        env:
+          RELEASE_REPOSITORY: ${{ github.event.client_payload.repository || inputs.repository }}
+          RELEASE_COMMIT: ${{ github.event.client_payload.commit || inputs.commit }}
+          RELEASE_SERVICE_ID: ${{ github.event.client_payload.service_id || inputs.service_id }}
+          RELEASE_ENVIRONMENT: ${{ github.event.client_payload.environment || inputs.environment }}
+          RELEASE_DEPLOYMENT_TARGET: ${{ github.event.client_payload.deployment_target || inputs.deployment_target }}
+          RELEASE_DEPLOYMENT_ID: ${{ github.event.client_payload.deployment_id || inputs.deployment_id }}
+          RELEASE_METADATA_URL: ${{ github.event.client_payload.metadata_url || inputs.metadata_url }}
+          RELEASE_STARTED_AT: ${{ github.event.client_payload.started_at || '' }}
+          RELEASE_ROLLBACK_REF: ${{ github.event.client_payload.rollback_ref || inputs.rollback_ref }}
+          RELEASE_OBSERVED_STATE: ${{ github.event.client_payload.release_state || '' }}
+          RELEASE_EVIDENCE_REF: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/release-watch.mjs request --output release-request.json
+
+      - name: Run targeted post-release journeys
+        id: journeys
+        continue-on-error: true
+        env:
+          RELEASE_SERVICE_ID: ${{ steps.request.outputs.service_id }}
+        run: node scripts/run-release-journeys.mjs --service-id "$RELEASE_SERVICE_ID"
+
+      - name: Produce ReleaseEvidence
+        id: evidence
+        if: always() && steps.request.outcome == 'success'
+        run: >-
+          node scripts/release-watch.mjs verify
+          --request release-request.json
+          --journey test-results/results.json
+          --output release-evidence.json
+
+      - name: Check out canonical contract validator
+        if: always() && steps.evidence.outcome == 'success'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: AtlasReaper311/atlas-infra
+          ref: main
+          path: .atlas-infra
+
+      - name: Validate ReleaseEvidence schema
+        id: schema
+        if: always() && steps.evidence.outcome == 'success'
+        run: >-
+          python3 .atlas-infra/scripts/validate_release_evidence.py
+          --instance release-evidence.json
+
+      - name: Upload release evidence
+        if: always() && steps.request.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-evidence-${{ github.run_id }}
+          path: |
+            release-evidence.json
+            playwright-report
+            test-results
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce verified-live status
+        if: always() && steps.evidence.outcome == 'success' && steps.schema.outcome == 'success'
+        run: node scripts/release-watch.mjs assert --evidence release-evidence.json

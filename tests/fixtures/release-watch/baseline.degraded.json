@@ -1,0 +1,17 @@
+{
+  "schema_version": "atlas-journey-watch/release-baseline/v1",
+  "generated_at": "2026-07-14T09:55:00Z",
+  "stale_after": "2026-07-14T10:10:00Z",
+  "baseline": {
+    "latency_ms_p95": 100,
+    "error_rate": 0.01
+  },
+  "observed": {
+    "latency_ms_p95": 160,
+    "error_rate": 0.05
+  },
+  "thresholds": {
+    "latency_regression_percent": 25,
+    "error_rate_increase": 0.02
+  }
+}

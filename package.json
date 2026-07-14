@@ -7,6 +7,9 @@
   "scripts": {
     "check": "node scripts/check.mjs",
     "test": "playwright test",
+    "test:offline": "node scripts/run-offline-journeys.mjs",
+    "test:release": "node scripts/run-release-journeys.mjs",
+    "test:unit": "node --test tests/release-watch.test.mjs",
     "test:headed": "playwright test --headed",
     "report": "playwright show-report"
   },
