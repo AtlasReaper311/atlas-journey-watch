@@ -1,10 +1,29 @@
-import { expect, test } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
+
+import { journeyIdsForService } from "../scripts/release-targets.mjs";
+import { createOfflineRequest } from "./offline-request.mjs";
 
 const API = process.env.ATLAS_API_URL || "https://api.atlas-systems.uk";
 const STATUS = process.env.ATLAS_STATUS_URL || "https://status.atlas-systems.uk";
 const SITE = process.env.ATLAS_SITE_URL || "https://atlas-systems.uk";
 const CORPUS = process.env.ATLAS_CORPUS_URL || "https://corpus.atlas-systems.uk";
 const RAMONE = process.env.ATLAS_RAMONE_URL || "https://ramone.atlas-systems.uk";
+const test = base.extend({
+  journeyRequest: async ({ request }, use) => {
+    await use(process.env.ATLAS_FIXTURE_MODE ? createOfflineRequest() : request);
+  },
+});
+const RELEASE_JOURNEYS = process.env.ATLAS_RELEASE_SERVICE_ID
+  ? new Set(journeyIdsForService(process.env.ATLAS_RELEASE_SERVICE_ID))
+  : null;
+
+function journeyTest(journeyId, title, callback) {
+  if (RELEASE_JOURNEYS && !RELEASE_JOURNEYS.has(journeyId)) {
+    test.skip(title, callback);
+    return;
+  }
+  test(title, callback);
+}
 
 function firstArray(value, preferredKeys = []) {
   if (Array.isArray(value)) {
@@ -63,7 +82,9 @@ async function textOrFail(response, label) {
 }
 
 test.describe("public estate journeys", () => {
-  test("public API advertises a working OpenAPI contract", async ({ request }) => {
+  journeyTest("api-contract", "public API advertises a working OpenAPI contract", async ({
+    journeyRequest: request,
+  }) => {
     const index = await jsonOrFail(await request.get(`${API}/v1`), "public API index");
     expect(index).toBeTruthy();
 
@@ -79,7 +100,9 @@ test.describe("public estate journeys", () => {
     expect(spec.paths["/v1/search"]).toBeTruthy();
   });
 
-  test("registry data reaches the public Lab surface", async ({ request }) => {
+  journeyTest("registry-lab", "registry data reaches the public Lab surface", async ({
+    journeyRequest: request,
+  }) => {
     const registry = await jsonOrFail(
       await request.get(`${API}/v1/registry`),
       "estate registry",
@@ -93,7 +116,9 @@ test.describe("public estate journeys", () => {
     expect(html).toMatch(/Lab|Live systems|System map|atlas-api-public|atlas-notify/i);
   });
 
-  test("estate search returns provenance, rate-limit honesty, or an honest upstream state", async ({ request }) => {
+  journeyTest("estate-search", "estate search returns provenance, rate-limit honesty, or an honest upstream state", async ({
+    journeyRequest: request,
+  }) => {
     const response = await request.get(`${API}/v1/search`, {
       params: { q: "zone_id Cloudflare route" },
     });
@@ -131,7 +156,9 @@ test.describe("public estate journeys", () => {
     expect(serialized).toMatch(/repo|source|path|file|provenance/);
   });
 
-  test("notification history remains readable", async ({ request }) => {
+  journeyTest("recent-activity", "notification history remains readable", async ({
+    journeyRequest: request,
+  }) => {
     const payload = await jsonOrFail(
       await request.get(`${API}/notify/recent`),
       "recent notification feed",
@@ -142,7 +169,9 @@ test.describe("public estate journeys", () => {
     expect(events.length).toBeLessThanOrEqual(200);
   });
 
-  test("local AI services report honest availability", async ({ request }) => {
+  journeyTest("local-ai-state", "local AI services report honest availability", async ({
+    journeyRequest: request,
+  }) => {
     const ramone = await jsonOrFail(
       await request.get(`${RAMONE}/status`),
       "Ramone status",
@@ -168,8 +197,9 @@ test.describe("public estate journeys", () => {
     expect(corpus.ok(), `corpus health returned ${corpus.status()}`).toBeTruthy();
   });
 
-
-  test("quota watchdog exposes a healthy usage snapshot", async ({ request }) => {
+  journeyTest("quota-watch", "quota watchdog exposes a healthy usage snapshot", async ({
+    journeyRequest: request,
+  }) => {
     const payload = await jsonOrFail(
       await request.get(`${API}/quota`),
       "quota watchdog",
@@ -181,7 +211,9 @@ test.describe("public estate journeys", () => {
     expect(payload.generated_at).toBeTruthy();
   });
 
-  test("public status surface renders service state", async ({ request }) => {
+  journeyTest("status-surface", "public status surface renders service state", async ({
+    journeyRequest: request,
+  }) => {
     const html = await textOrFail(await request.get(STATUS), "Status page");
 
     expect(html).toMatch(

@@ -32,6 +32,84 @@ Scheduled synthetic journeys across the public Atlas Systems estate. Component h
 
 The suite runs in desktop and mobile Chromium every six hours. A failure retains the HTML report, screenshot, trace, video, console output, and request evidence in one workflow artifact. Only one consolidated failure event is posted through `atlas-notify`.
 
+## Release watch
+
+Phase 3 adds an event-driven release assurance path without changing the
+six-hourly estate run. `atlas-journey-watch` verifies one allowlisted service at
+a time; `atlas-infra` owns the policy, `ReleaseEvidence` contract, calling
+example, and recovery runbook.
+
+The release verifier compares the expected repository, full commit SHA, service
+ID, and environment with explicit live metadata. It never infers identity from
+a display name, short SHA, or version string. It then reuses only the existing
+journeys mapped to that service and emits JSON conforming to
+`atlas-infra/contracts/v1/release-evidence.schema.json`.
+
+Supported service targets are in `config/release-targets.json`. `simple-proxy`
+is explicitly excluded because the Phase 1 classification marks it deprecated,
+internal, external-derived, and ineligible for release ownership.
+
+### Workflow interface
+
+`.github/workflows/release-watch.yml` supports `workflow_dispatch` and
+`repository_dispatch` event type `release-watch`. A request supplies:
+
+- repository, full commit SHA, service ID, and environment;
+- deployment target and deployment/workflow run ID;
+- an allowlisted HTTPS metadata URL;
+- deployment start time and a safe Markdown rollback reference.
+
+The workflow has read-only repository permission, a 25-minute timeout,
+release-keyed concurrency, immutable action pins, and 30-day evidence retention.
+It requires no secret itself. A participating repository should call
+`workflow_dispatch` with `RELEASE_WATCH_DISPATCH_TOKEN`, restricted to
+`AtlasReaper311/atlas-journey-watch` with GitHub repository `Metadata: read` and
+`Actions: write`. The alternative `repository_dispatch` API currently requires
+`Contents: write` on the target repository, so it is supported but not the
+least-privilege default. Neither path needs deployments, environments, secrets
+administration, or Cloudflare permission.
+
+### Local fixture mode
+
+No release test needs a live endpoint:
+
+```bash
+npm run check
+npm run test:unit
+npm run test:offline
+node scripts/release-watch.mjs verify \
+  --request tests/fixtures/release-watch/request.json \
+  --metadata-file tests/fixtures/release-watch/metadata.match.json \
+  --journey tests/fixtures/release-watch/journey.passed.json \
+  --fixture \
+  --output release-evidence.json
+python3 ../atlas-infra/scripts/validate_release_evidence.py \
+  --instance release-evidence.json
+```
+
+Fixture mode fixes the completion timestamp, so identical inputs produce
+byte-identical evidence. The offline Playwright runner injects an in-process
+mock request fixture and exercises the existing desktop and mobile journeys
+without opening a listener.
+
+There is no current latency/error baseline in this repository or `atlas-infra`.
+Without a supplied baseline file, evidence records `baseline-comparison` as
+`unknown` and does not block an otherwise verified release. If a producer later
+supplies baseline, observed values, `generated_at`/`stale_after`, and explicit
+thresholds, the CLI compares them; it never invents thresholds. A stale
+baseline remains explicit and non-blocking.
+
+### State and rollback limits
+
+The v1 release states are `pending`, `live`, `mismatch`, `degraded`, `failed`,
+`rolled-back`, and `unknown`. Endpoint absence uses
+`live_identity: unavailable` and top-level `unknown`. Missing or malformed
+identity never becomes `live`.
+
+Release watch performs no deploy or rollback. `rollback_ref` is inert guidance,
+an observed `rolled-back` state must come from a separate human-controlled
+operation, and the CLI rejects `--auto-rollback`.
+
 ## Setup
 
 ```bash
@@ -41,6 +119,9 @@ npm test
 ```
 
 Set `NOTIFY_TOKEN` as a GitHub Actions secret. It is used only when a run fails. The tests themselves use public read endpoints and require no production credential.
+
+`NOTIFY_TOKEN` belongs only to the scheduled estate-journey workflow. The
+release-watch workflow does not read it or any other secret.
 
 ## Failure discipline
 

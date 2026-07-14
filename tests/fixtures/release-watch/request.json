@@ -1,0 +1,13 @@
+{
+  "repository": "AtlasReaper311/atlas-api-public",
+  "commit": "1111111111111111111111111111111111111111",
+  "service_id": "atlas-api-public",
+  "environment": "production",
+  "deployment_target": "cloudflare-worker:atlas-api-public",
+  "deployment_id": "github-run:100",
+  "metadata_url": "https://api.atlas-systems.uk/v1/_meta",
+  "started_at": "2026-07-14T10:00:00Z",
+  "rollback_ref": "docs/runbooks/release-watch.md",
+  "evidence_ref": "https://github.com/AtlasReaper311/atlas-journey-watch/actions/runs/100",
+  "observed_release_state": null
+}

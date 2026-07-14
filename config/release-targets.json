@@ -1,0 +1,54 @@
+{
+  "schema_version": "atlas-journey-watch/release-targets/v1",
+  "targets": [
+    {
+      "service_id": "atlas-api-public",
+      "repository": "AtlasReaper311/atlas-api-public",
+      "metadata_hosts": ["api.atlas-systems.uk"],
+      "journey_ids": ["api-contract", "registry-lab", "estate-search"]
+    },
+    {
+      "service_id": "atlas-systems",
+      "repository": "AtlasReaper311/atlas-systems",
+      "metadata_hosts": ["atlas-systems.uk"],
+      "journey_ids": ["registry-lab"]
+    },
+    {
+      "service_id": "atlas-notify",
+      "repository": "AtlasReaper311/atlas-notify",
+      "metadata_hosts": ["api.atlas-systems.uk"],
+      "journey_ids": ["recent-activity"]
+    },
+    {
+      "service_id": "atlas-corpus",
+      "repository": "AtlasReaper311/atlas-corpus",
+      "metadata_hosts": ["corpus.atlas-systems.uk"],
+      "journey_ids": ["local-ai-state"]
+    },
+    {
+      "service_id": "ramone-edge",
+      "repository": "AtlasReaper311/ramone-edge",
+      "metadata_hosts": ["ramone.atlas-systems.uk"],
+      "journey_ids": ["local-ai-state"]
+    },
+    {
+      "service_id": "atlas-quota-watch",
+      "repository": "AtlasReaper311/atlas-quota-watch",
+      "metadata_hosts": ["api.atlas-systems.uk"],
+      "journey_ids": ["quota-watch"]
+    },
+    {
+      "service_id": "status",
+      "repository": "AtlasReaper311/status",
+      "metadata_hosts": ["status.atlas-systems.uk"],
+      "journey_ids": ["status-surface"]
+    }
+  ],
+  "excluded": [
+    {
+      "service_id": "simple-proxy",
+      "repository": "AtlasReaper311/simple-proxy",
+      "reason": "deprecated internal external-derived repository with release ownership disabled"
+    }
+  ]
+}

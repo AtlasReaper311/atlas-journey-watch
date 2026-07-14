@@ -1,0 +1,6 @@
+{
+  "service_id": "atlas-api-public",
+  "repository": "AtlasReaper311/atlas-api-public",
+  "commit": "1111111111111111111111111111111111111111",
+  "environment": "production"
+}
