@@ -20,6 +20,6 @@ jobs:
     if: >-
       github.actor == 'dependabot[bot]' &&
       github.event.pull_request.user.login == 'dependabot[bot]'
-    uses: AtlasReaper311/atlas-infra/.github/workflows/dependabot-review.yml@31c80e4edf71df550687be89319ee75163a295b9
+    uses: AtlasReaper311/atlas-infra/.github/workflows/dependabot-review.yml@8e6d08701823b02c4859bfc72af67fc8ace1f4b5
     with:
       automerge_enabled: ${{ vars.DEPENDABOT_AUTOMERGE_ENABLED == 'true' }}

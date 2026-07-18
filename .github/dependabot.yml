@@ -31,10 +31,9 @@ updates:
       - "npm"
     target-branch: "main"
     groups:
-      npm-minor-patch:
+      npm-minor:
         applies-to: "version-updates"
         patterns:
           - "*"
         update-types:
           - "minor"
-          - "patch"
