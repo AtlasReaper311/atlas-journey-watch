@@ -317,6 +317,28 @@ function nonNegativeNumber(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+/**
+ * Resolve which latency field a baseline document uses. The original v1
+ * shape carries `latency_ms_p95`; the measured estate producer
+ * (atlas-api-public `/v1/reliability/baseline/{service_id}`) declares
+ * `latency_metric: "avg"` and carries `latency_ms_avg`, because per-day
+ * probe aggregates cannot support percentiles and claiming one would be
+ * invented precision. Exactly one of the two fields must be present on
+ * both sides; mixing metrics is not a comparison.
+ */
+function latencyField(report) {
+  const metric = report?.latency_metric === "avg" ? "avg" : "p95";
+  const field = metric === "avg" ? "latency_ms_avg" : "latency_ms_p95";
+  const other = metric === "avg" ? "latency_ms_p95" : "latency_ms_avg";
+  if (
+    report?.baseline?.[other] !== undefined ||
+    report?.observed?.[other] !== undefined
+  ) {
+    return null;
+  }
+  return field;
+}
+
 export async function loadBaselineResult(file, observedAt = new Date().toISOString()) {
   if (!file) {
     return { state: "unavailable", check_status: "unknown" };
@@ -327,10 +349,14 @@ export async function loadBaselineResult(file, observedAt = new Date().toISOStri
   } catch {
     return { state: "unavailable", check_status: "unknown" };
   }
+  const field = latencyField(report);
+  if (field === null) {
+    return { state: "unavailable", check_status: "unknown" };
+  }
   const values = [
-    report?.baseline?.latency_ms_p95,
+    report?.baseline?.[field],
     report?.baseline?.error_rate,
-    report?.observed?.latency_ms_p95,
+    report?.observed?.[field],
     report?.observed?.error_rate,
     report?.thresholds?.latency_regression_percent,
     report?.thresholds?.error_rate_increase,
@@ -340,7 +366,7 @@ export async function loadBaselineResult(file, observedAt = new Date().toISOStri
     !UTC_TIMESTAMP.test(report.generated_at || "") ||
     !UTC_TIMESTAMP.test(report.stale_after || "") ||
     !values.every(nonNegativeNumber) ||
-    report.baseline.latency_ms_p95 === 0
+    report.baseline[field] === 0
   ) {
     return { state: "unavailable", check_status: "unknown" };
   }
@@ -352,8 +378,8 @@ export async function loadBaselineResult(file, observedAt = new Date().toISOStri
   }
 
   const latencyRegression =
-    ((report.observed.latency_ms_p95 - report.baseline.latency_ms_p95) /
-      report.baseline.latency_ms_p95) *
+    ((report.observed[field] - report.baseline[field]) /
+      report.baseline[field]) *
     100;
   const errorIncrease = report.observed.error_rate - report.baseline.error_rate;
   if (
