@@ -92,12 +92,22 @@ byte-identical evidence. The offline Playwright runner injects an in-process
 mock request fixture and exercises the existing desktop and mobile journeys
 without opening a listener.
 
-There is no current latency/error baseline in this repository or `atlas-infra`.
-Without a supplied baseline file, evidence records `baseline-comparison` as
-`unknown` and does not block an otherwise verified release. If a producer later
-supplies baseline, observed values, `generated_at`/`stale_after`, and explicit
-thresholds, the CLI compares them; it never invents thresholds. A stale
-baseline remains explicit and non-blocking.
+A measured baseline producer now exists:
+`https://api.atlas-systems.uk/v1/reliability/baseline/{service_id}` on
+[`atlas-api-public`](https://github.com/AtlasReaper311/atlas-api-public)
+derives one from the estate's probe history, declaring
+`latency_metric: "avg"` with `latency_ms_avg` because per-day probe
+aggregates cannot support percentiles; the original `latency_ms_p95` shape
+remains accepted, and a document mixing the two metrics is `unavailable`
+rather than a comparison. The release workflow fetches the baseline with a
+non-blocking step: a fetch failure, a service without an approved
+objective, or history that cannot support an honest comparison records
+`baseline-comparison` as `unknown` exactly as before. The CLI never
+invents thresholds, and a stale baseline remains explicit and
+non-blocking. Note the fetch-time honesty bound: minutes after a deploy,
+the observed window necessarily holds mostly pre-release samples, so this
+gate proves the service is within its measured norms; genuine post-release
+regression evidence accrues later on `/dora/releases`.
 
 ### State and rollback limits
 

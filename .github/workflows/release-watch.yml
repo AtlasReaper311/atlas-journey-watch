@@ -99,6 +99,16 @@ jobs:
           RELEASE_SERVICE_ID: ${{ steps.request.outputs.service_id }}
         run: node scripts/run-release-journeys.mjs --service-id "$RELEASE_SERVICE_ID"
 
+      - name: Fetch measured reliability baseline
+        id: baseline
+        continue-on-error: true
+        env:
+          RELEASE_SERVICE_ID: ${{ steps.request.outputs.service_id }}
+        run: >-
+          curl --fail --silent --show-error --max-time 15
+          "https://api.atlas-systems.uk/v1/reliability/baseline/$RELEASE_SERVICE_ID"
+          | python3 -c 'import json,sys; body=json.load(sys.stdin); json.dump(body["baseline"], open("release-baseline.json","w"))'
+
       - name: Produce ReleaseEvidence
         id: evidence
         if: always() && steps.request.outcome == 'success'
@@ -106,6 +116,7 @@ jobs:
           node scripts/release-watch.mjs verify
           --request release-request.json
           --journey test-results/results.json
+          ${{ steps.baseline.outcome == 'success' && '--baseline release-baseline.json' || '' }}
           --output release-evidence.json
 
       - name: Check out canonical contract validator

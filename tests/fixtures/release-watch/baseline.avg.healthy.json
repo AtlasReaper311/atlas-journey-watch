@@ -1,0 +1,19 @@
+{
+  "schema_version": "atlas-journey-watch/release-baseline/v1",
+  "generated_at": "2026-07-14T09:55:00Z",
+  "stale_after": "2026-07-14T10:10:00Z",
+  "service_id": "atlas-api-public",
+  "latency_metric": "avg",
+  "baseline": {
+    "latency_ms_avg": 180,
+    "error_rate": 0.002
+  },
+  "observed": {
+    "latency_ms_avg": 190,
+    "error_rate": 0.003
+  },
+  "thresholds": {
+    "latency_regression_percent": 25,
+    "error_rate_increase": 0.02
+  }
+}

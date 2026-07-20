@@ -248,3 +248,24 @@ test("release workflow is read-only and hardened", async () => {
   const actions = [...workflow.matchAll(/uses: [^@\s]+@([0-9a-f]{40}) # (\S+)/g)];
   assert.equal(actions.length, 4);
 });
+
+test("average-latency baseline variant compares healthy and degraded observations", async () => {
+  assert.equal(
+    (await evidenceFor({ baseline: "baseline.avg.healthy.json" })).status,
+    "live",
+  );
+  assert.equal(
+    (await evidenceFor({ baseline: "baseline.avg.degraded.json" })).status,
+    "degraded",
+  );
+});
+
+test("a baseline mixing latency metrics is unavailable, not a comparison", async () => {
+  const evidence = await evidenceFor({ baseline: "baseline.mixed-metrics.json" });
+  const baseline = evidence.checks.find(
+    (check) => check.check_id === "baseline-comparison",
+  );
+  assert.equal(baseline.state, "unavailable");
+  assert.equal(baseline.status, "unknown");
+  assert.equal(evidence.status, "live");
+});
