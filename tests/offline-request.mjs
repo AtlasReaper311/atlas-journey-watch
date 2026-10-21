@@ -3,6 +3,8 @@ class FixtureResponse {
     this.statusCode = status;
     this.payload = payload;
     this.contentType = contentType;
+    this.statusTextValue = status === 502 ? "Bad Gateway" : "";
+    this.responseHeaders = status === 502 ? { "retry-after": "60" } : {};
   }
 
   ok() {
@@ -13,11 +15,19 @@ class FixtureResponse {
     return this.statusCode;
   }
 
+  statusText() {
+    return this.statusTextValue;
+  }
+
   headers() {
-    return { "content-type": this.contentType };
+    return { "content-type": this.contentType, ...this.responseHeaders };
   }
 
   async json() {
+    if (typeof this.payload === "string") {
+      return JSON.parse(this.payload);
+    }
+
     return this.payload;
   }
 
@@ -34,7 +44,7 @@ const fixtureHtml = (text) =>
 export function createOfflineRequest() {
   return {
     async get(value) {
-      const { pathname } = new URL(value);
+      const { hostname, pathname } = new URL(value);
       if (pathname === "/v1") {
         return new FixtureResponse(200, { service: "atlas-api-public", status: "ok" });
       }
@@ -64,9 +74,20 @@ export function createOfflineRequest() {
       }
       if (pathname === "/status") {
         return new FixtureResponse(200, {
-          awake: false,
+          awake: process.env.ATLAS_FIXTURE_CORPUS_BAD_GATEWAY === "1",
           checked_at: "2026-07-14T10:00:00Z",
         });
+      }
+      if (
+        hostname === "corpus.fixture.invalid" &&
+        pathname === "/health" &&
+        process.env.ATLAS_FIXTURE_CORPUS_BAD_GATEWAY === "1"
+      ) {
+        return new FixtureResponse(
+          502,
+          "<!doctype html><title>502: Bad Gateway</title><p>Cloudflare bad gateway</p>",
+          "text/html; charset=UTF-8",
+        );
       }
       if (pathname === "/quota") {
         return new FixtureResponse(200, {

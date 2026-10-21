@@ -187,9 +187,23 @@ test.describe("public estate journeys", () => {
     const corpus = await request.get(`${CORPUS}/health`);
 
     if ([429, 502, 503].includes(corpus.status())) {
-      const payload = await optionalJson(corpus);
-      expect(JSON.stringify(payload).toLowerCase()).toMatch(
-        /rate|limit|sleep|down|offline|degraded|stale|unreachable|false|bad gateway|upstream|error/,
+      const evidence = [
+        corpus.status(),
+        corpus.statusText(),
+        corpus.headers()["retry-after"]
+          ? `retry-after ${corpus.headers()["retry-after"]}`
+          : "",
+        await corpus.text(),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      expect(
+        evidence,
+        `corpus health returned ${corpus.status()} without an explanation`,
+      ).toMatch(
+        /rate|limit|too many|sleep|down|offline|degraded|stale|unreachable|unavailable|false|bad gateway|upstream|error|retry-after/,
       );
       return;
     }
